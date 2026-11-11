@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+:root {
+  --bg: #fafaf8;
+  --tint: #f0f0ec;
+  --tint-2: #e7e7e2;
+  --text: #1a1a18;
+  --muted: #74746e;
+  --faint: #a3a39c;
+  --accent: #1f4fd1;
+  --ok: #1e7a3c;
+  --warn: #a35c00;
+  --err: #b42318;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131312; --tint: #1c1c1a; --tint-2: #262623;
+    --text: #ececea; --muted: #9a9a93; --faint: #66665f;
+    --accent: #8aa8ff; --ok: #6fcf8a; --warn: #f0b45a; --err: #ff8a80;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131312; --tint: #1c1c1a; --tint-2: #262623;
+  --text: #ececea; --muted: #9a9a93; --faint: #66665f;
+  --accent: #8aa8ff; --ok: #6fcf8a; --warn: #f0b45a; --err: #ff8a80;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; }
+.app { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; max-width: 760px; margin: 0 auto; padding: 0 16px; }
+
+header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 28px 0 20px; flex-wrap: wrap; }
+.title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+.config { margin-top: 2px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.config .missing { color: var(--err); }
+.tabs { display: flex; gap: 2px; background: var(--tint); padding: 3px; border-radius: 8px; }
+.tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 500; color: var(--muted); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--bg); color: var(--text); }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+main { overflow-y: auto; padding: 4px 0 24px; scrollbar-width: thin; scrollbar-color: var(--tint-2) transparent; }
+
+.intro p { margin: 0 0 18px; color: var(--muted); max-width: 56ch; }
+.scope { font-family: var(--mono); font-size: 12px; color: var(--faint); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em; }
+.samples { list-style: none; margin: 0; padding: 0; }
+.samples button { display: grid; grid-template-columns: 92px 1fr; gap: 12px; width: 100%; border: 0; background: none; text-align: left; padding: 10px 12px; margin: 0 -12px; width: calc(100% + 24px); border-radius: 8px; cursor: pointer; }
+.samples button:hover { background: var(--tint); }
+.samples button:focus-visible { outline: 2px solid var(--accent); }
+.samples .lvl { font-family: var(--mono); font-size: 12px; color: var(--faint); padding-top: 2px; }
+
+.turn { padding: 22px 0; }
+.turn + .turn { margin-top: 4px; }
+.q { background: var(--tint); border-radius: 10px; padding: 10px 14px; margin-left: auto; width: fit-content; max-width: 85%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.a { margin-top: 18px; }
+.a-meta { display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.a-meta .st-completed { color: var(--ok); }
+.a-meta .st-max_steps { color: var(--warn); }
+.a-meta .st-error { color: var(--err); }
+.a-meta .dot::before { content: '●'; margin-right: 6px; font-size: 9px; vertical-align: 1px; }
+
+.md { overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3, .md h4 { font-size: 15px; font-weight: 600; margin: 22px 0 6px; letter-spacing: -0.005em; }
+.md p { margin: 8px 0; }
+.md ul, .md ol { margin: 8px 0; padding-left: 20px; }
+.md li { margin: 3px 0; }
+.md li::marker { color: var(--faint); }
+.md strong { font-weight: 600; }
+.md a { color: var(--accent); text-decoration: none; }
+.md a:hover { text-decoration: underline; }
+.md code { font-family: var(--mono); font-size: 12.5px; background: var(--tint); padding: 1px 5px; border-radius: 4px; }
+.md pre { background: var(--tint); padding: 12px 14px; border-radius: 8px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+.md blockquote { margin: 10px 0; padding: 8px 14px; background: var(--tint); border-radius: 8px; color: var(--muted); }
+.md blockquote p { margin: 0; }
+.md hr { border: 0; height: 12px; }
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+.md table { border-collapse: collapse; font-size: 13.5px; width: 100%; }
+.md th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 0 12px 6px 0; white-space: nowrap; }
+.md td { padding: 7px 12px 7px 0; vertical-align: top; }
+.md tbody tr:nth-child(odd) td { background: var(--tint); }
+.md tbody td:first-child { padding-left: 10px; border-radius: 6px 0 0 6px; }
+.md tbody td:last-child { border-radius: 0 6px 6px 0; }
+.md thead th:first-child { padding-left: 10px; }
+
+.trace { margin-top: 16px; }
+.trace summary { list-style: none; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--muted); display: inline-flex; gap: 8px; align-items: center; padding: 4px 8px; margin-left: -8px; border-radius: 6px; }
+.trace summary:hover { background: var(--tint); }
+.trace summary::-webkit-details-marker { display: none; }
+.trace summary .chev { display: inline-block; transition: transform .15s; }
+.trace[open] summary .chev { transform: rotate(90deg); }
+.steps { list-style: none; margin: 8px 0 0; padding: 0; font-family: var(--mono); font-size: 12.5px; }
+.steps li { display: grid; grid-template-columns: 56px 1fr; gap: 10px; padding: 5px 0; }
+.steps .n { color: var(--faint); }
+.steps .name { color: var(--text); }
+.steps .err { color: var(--err); margin-left: 8px; }
+.steps .ev { color: var(--warn); }
+.steps .args { color: var(--muted); overflow-wrap: anywhere; display: block; }
+
+.thinking { font-family: var(--mono); font-size: 12.5px; color: var(--muted); margin-top: 18px; }
+.thinking::after { content: ''; animation: dots 1.4s steps(4) infinite; }
+@keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+.error-msg { color: var(--err); }
+
+footer { padding: 12px 0 20px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; background: var(--tint); border-radius: 12px; padding: 8px 8px 8px 16px; }
+.composer textarea { flex: 1; border: 0; outline: 0; resize: none; background: none; color: var(--text); font: inherit; max-height: 160px; padding: 7px 0; }
+.composer textarea::placeholder { color: var(--faint); }
+.send { border: 0; background: var(--text); color: var(--bg); font-weight: 500; font-size: 14px; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
+.send:disabled { opacity: .35; cursor: default; }
+.send:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.note { font-size: 12px; color: var(--faint); margin-top: 8px; }
+
+@media (max-width: 600px) {
+  header { padding-top: 18px; }
+  .samples button { grid-template-columns: 1fr; gap: 0; }
+  .q { max-width: 92%; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1 class="title">Status Agent</h1>
+      <div class="config">
+        {% if provider and model %}{{ provider }} / {{ model }} · snapshot
+        {% else %}<span class="missing">Chưa cấu hình PROVIDER/MODEL trong .env</span>{% endif %}
+      </div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Bộ tools">
+      <button type="button" role="tab" data-mode="core" aria-selected="true">Mặc định</button>
+      <button type="button" role="tab" data-mode="bonus" aria-selected="false">Bonus</button>
+    </div>
+  </header>
+
+  <main id="chat">
+    <section class="intro" id="intro">
+      <p>Hỏi về sự cố dịch vụ cloud. Agent tự gọi tool để đọc status page và incident, rồi trả lời kèm nguồn và giới hạn của bằng chứng.</p>
+      <div data-panel="core">
+        <p class="scope">GitHub · Cloudflare</p>
+        <ul class="samples">
+          {% for c in samples.core %}<li><button type="button" data-q="{{ c.query }}"><span class="lvl">{{ c.level }}</span><span>{{ c.query }}</span></button></li>{% endfor %}
+        </ul>
+      </div>
+      <div data-panel="bonus" hidden>
+        <p class="scope">GitHub · Cloudflare · Vercel · npm · DigitalOcean</p>
+        <ul class="samples">
+          {% for c in samples.bonus %}<li><button type="button" data-q="{{ c.query }}"><span class="lvl">{{ c.level | replace(' (bonus)', '') }}</span><span>{{ c.query }}</span></button></li>{% endfor %}
+          <li><button type="button" data-q="Tổng hợp trạng thái GitHub, Cloudflare, Vercel, npm và DigitalOcean, kèm thời điểm dữ liệu và nguồn."><span class="lvl">5 provider</span><span>Tổng hợp trạng thái cả năm nhà cung cấp, kèm thời điểm dữ liệu và nguồn.</span></button></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <form class="composer" id="form">
+      <textarea id="input" rows="1" placeholder="Hỏi về GitHub, Cloudflare…" aria-label="Câu hỏi"></textarea>
+      <button class="send" id="send" type="submit">Gửi</button>
+    </form>
+    <div class="note">Mỗi câu hỏi là một lượt độc lập. Dữ liệu là snapshot, không phản ánh trạng thái hiện tại.</div>
+  </footer>
+</div>
+
+<script>
+const chat = document.getElementById('chat');
+const form = document.getElementById('form');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+const placeholders = { core: 'Hỏi về GitHub, Cloudflare…', bonus: 'Hỏi về GitHub, Cloudflare, Vercel, npm, DigitalOcean…' };
+let mode = 'core';
+
+marked.setOptions({ gfm: true, breaks: false });
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function renderMarkdown(text) {
+  const wrap = el('div', 'md');
+  wrap.innerHTML = DOMPurify.sanitize(marked.parse(text || ''));
+  wrap.querySelectorAll('table').forEach(t => {
+    const div = el('div', 'table-wrap');
+    t.replaceWith(div);
+    div.appendChild(t);
+  });
+  wrap.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
+  return wrap;
+}
+
+function setMode(next) {
+  mode = next;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
+  document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== mode; });
+  input.placeholder = placeholders[mode];
+}
+
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.querySelectorAll('.samples button').forEach(b => b.addEventListener('click', () => { input.value = b.dataset.q; ask(); }));
+input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px'; });
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
+form.addEventListener('submit', e => { e.preventDefault(); ask(); });
+
+function renderTrace(data) {
+  const details = el('details', 'trace');
+  const summary = el('summary');
+  summary.appendChild(el('span', 'chev', '›'));
+  summary.appendChild(el('span', null, `trace · ${data.model_calls} model calls · ${data.tool_calls.length} tool calls`));
+  details.appendChild(summary);
+  const list = el('ol', 'steps');
+  const rows = [
+    ...data.tool_calls.map(t => ({ step: t.step, kind: 'tool', t })),
+    ...data.other_events.map(ev => ({ step: ev.step, kind: 'event', ev })),
+  ].sort((a, b) => (a.step ?? 0) - (b.step ?? 0));
+  if (!rows.length) {
+    const li = el('li');
+    li.appendChild(el('span', 'n', '—'));
+    li.appendChild(el('span', 'args', 'Không gọi tool nào.'));
+    list.appendChild(li);
+  }
+  rows.forEach(r => {
+    const li = el('li');
+    li.appendChild(el('span', 'n', 'step ' + (r.step ?? '?')));
+    const body = el('span');
+    if (r.kind === 'tool') {
+      body.appendChild(el('span', 'name', r.t.name));
+      if (r.t.error) body.appendChild(el('span', 'err', r.t.error));
+      body.appendChild(el('span', 'args', r.t.arguments));
+    } else {
+      body.appendChild(el('span', 'ev', r.ev.event));
+    }
+    li.appendChild(body);
+    list.appendChild(li);
+  });
+  details.appendChild(list);
+  return details;
+}
+
+async function ask() {
+  const query = input.value.trim();
+  if (!query || sendBtn.disabled) return;
+  document.getElementById('intro')?.remove();
+  input.value = '';
+  input.style.height = 'auto';
+
+  const turn = el('section', 'turn');
+  turn.appendChild(el('div', 'q', query));
+  const thinking = el('div', 'thinking', 'đang điều tra' + (mode === 'bonus' ? ' (bonus)' : ''));
+  turn.appendChild(thinking);
+  chat.appendChild(turn);
+  turn.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  sendBtn.disabled = true;
+
+  const usedMode = mode;
+  const answer = el('div', 'a');
+  try {
+    const res = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, mode: usedMode }) });
+    const data = await res.json();
+    if (!res.ok) {
+      answer.appendChild(el('p', 'error-msg', typeof data.detail === 'string' ? data.detail : 'Yêu cầu không hợp lệ.'));
+    } else {
+      const meta = el('div', 'a-meta');
+      meta.appendChild(el('span', 'dot st-' + data.status, data.status));
+      meta.appendChild(el('span', null, usedMode === 'bonus' ? 'bonus' : 'mặc định'));
+      meta.appendChild(el('span', null, data.total_tokens.toLocaleString('vi-VN') + ' tokens'));
+      answer.appendChild(meta);
+      const fallback = data.error ? '**Lỗi:** ' + data.error : '_Agent không trả lời trong giới hạn bước._';
+      answer.appendChild(renderMarkdown(data.answer || fallback));
+      answer.appendChild(renderTrace(data));
+    }
+  } catch (err) {
+    answer.appendChild(el('p', 'error-msg', 'Không kết nối được server.'));
+  } finally {
+    thinking.remove();
+    turn.appendChild(answer);
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+</script>
+</body>
+</html>

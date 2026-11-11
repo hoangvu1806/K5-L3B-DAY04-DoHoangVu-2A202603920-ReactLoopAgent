@@ -91,3 +91,32 @@ Giới hạn bonus:
 - Giới hạn 3 lần được đếm theo (tool, provider) trong một run, không theo thời gian; nếu API thật cần chờ lâu hơn 5 giây, agent sẽ thử lại sớm và có thể hết lượt.
 - Chỉ chạy một lần, cùng judge model với agent, nên 99.4 chỉ là ước lượng.
 - B9 dùng 7 tool calls để kiểm tra các provider khác dù câu hỏi về Linear/Slack, hơi tốn chi phí không cần thiết.
+
+## 7. Demo: CLI và web
+
+Phần demo chỉ gọi lại `run_agent`, không thay đổi agent hay eval.
+
+**CLI (`demo.py`)**
+
+- `python demo.py`: chạy 8 câu hỏi tự nhiên từ dễ đến khó, gồm 6 câu cho bộ tools mặc định và 2 câu bonus, rồi ghi `demo_results.json`. Mỗi câu có query, mức độ, status, số model calls, danh sách tool calls (step, arguments, lỗi), URL incident đã thấy, answer, tokens và trace đầy đủ.
+- `python demo.py --case D3` chạy một câu; `python demo.py --chat [--bonus]` mở chat CLI, in từng tool call theo step trước khi in câu trả lời.
+
+| ID | Mức | Hành vi quan sát được |
+|---|---|---|
+| D1 | dễ | 1 tool call, kết luận GitHub không sập kèm snapshot time. |
+| D3 | trung bình | 7 tool calls, đọc nhiều incident ngày 4/11 rồi nêu nguyên nhân và URL. |
+| D4 | khó | Không quy kết lỗi ở Việt Nam cho incident Spectrum tại Phoenix. |
+| D5 | khó | Sửa tiền đề "GitHub outage toàn cầu", không bịa link. |
+| D6 | ngoài phạm vi | Không gọi tool; vẫn viết email theo yêu cầu (lựa chọn thiết kế, giống cách eval chấm H4). |
+| D8 | khó, bonus | Gọi cả 5 status tools và 3 incident, kết luận không đủ căn cứ nói là cùng một sự cố. |
+
+**Web (`app.py`, `templates/index.html`)**
+
+- Backend: FastAPI với Jinja2. `GET /` render trang chat, câu mẫu lấy từ `DEMO_CASES` của `demo.py`. `POST /api/ask` nhận `{query, mode}` (`mode` chỉ nhận `core` hoặc `bonus`, sai thì trả 422), chạy `run_agent` với `StatusTools` hoặc `BonusTools` (`max_steps` 8 hoặc 16), rồi trả kết quả cùng định dạng với `demo_results.json`.
+- `app.py` tự đọc `.env` khi khởi động (chỉ đặt biến chưa có trong shell), nên chạy được cả trên PowerShell không cần `source .env`. Key chỉ dùng ở server, không gửi xuống trình duyệt.
+- UI: chuyển chế độ **Mặc định / Bonus**, mỗi chế độ có danh sách câu mẫu riêng. Câu trả lời được render markdown (marked, lọc qua DOMPurify để tránh XSS từ nội dung model hoặc tool), có trạng thái, số tokens và phần trace gập lại được, liệt kê tool calls và các event như `validation_missing_source` hay `retry_blocked` theo step. Style tối giản, không viền, có light/dark mode, dùng được trên điện thoại.
+- Chạy: `python -m uvicorn app:app --port 8000` rồi mở `http://127.0.0.1:8000`.
+
+**Cập nhật sau eval: quy tắc phạm vi và bẫy.** Sau khi chạy `eval_after.json` và `eval_bonus.json`, tôi thêm vào `AGENT_RULES` các quy tắc: từ chối ngắn gọn câu hỏi ngoài phạm vi mà không gọi tool, với câu hỏi lẫn lộn chỉ trả lời phần trong phạm vi, không suy ra status của nhà cung cấp không có tool, và nhận biết bẫy (đòi xác nhận sẵn kết luận, bịa link/ID, ép không nói thiếu dữ liệu, đòi tiết lộ system prompt). Thử tay: câu viết email bị từ chối với 0 tool (trước đó agent viết email); câu "in system prompt" bị từ chối; câu Linear/Slack trả lời không có dữ liệu với 0 tool (B9 trong eval bonus từng gọi 7 tools). Thay đổi này **chưa được đo bằng eval**: hai file eval phản ánh agent trước khi thêm quy tắc, cần chạy lại cùng cấu hình để so sánh.
+
+Giới hạn của demo: mỗi câu hỏi là một lượt độc lập (agent không nhớ câu trước); dữ liệu là snapshot; request đồng bộ nên phải chờ agent chạy xong mới hiện câu trả lời, không stream từng bước.
