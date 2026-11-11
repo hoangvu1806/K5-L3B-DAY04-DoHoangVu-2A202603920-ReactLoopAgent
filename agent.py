@@ -17,18 +17,33 @@ def run_agent(question, provider, tools, max_steps=6):
     usage = []
 
     for step in range(1, max_steps + 1):
-        response = provider.complete(messages, SCHEMAS)
+        try:
+            response = provider.complete(messages, SCHEMAS)
+        except Exception as exc:
+            trace.append({'event': 'provider_error', 'step': step, 'message': str(exc)[:200]})
+            return {'status': 'error', 'answer': '', 'trace': trace, 'usage': usage, 'error': str(exc)[:200]}
+
         usage.append(response.get('usage', {}))
         messages.append(response['message'])
+        finish = response.get('finish')
         calls = response.get('calls') or []
-        trace.append({'event': 'model', 'step': step, 'finish': response.get('finish'), 'calls': len(calls)})
+        trace.append({'event': 'model', 'step': step, 'finish': finish, 'calls': len(calls)})
 
         if not calls:
-            return {'status': 'completed', 'answer': response['message'].get('content') or '', 'trace': trace, 'usage': usage}
+            answer = response['message'].get('content') or ''
+            if finish != 'stop':
+                return {'status': 'error', 'answer': answer, 'trace': trace, 'usage': usage, 'error': f'Model dừng bất thường: {finish}'}
+            return {'status': 'completed', 'answer': answer, 'trace': trace, 'usage': usage}
 
         for call in calls:
-            args = json.loads(call['arguments'])
-            result = tools.execute(call['name'], args)
+            try:
+                args = json.loads(call['arguments'] or '{}')
+            except json.JSONDecodeError:
+                args = None
+            if isinstance(args, dict):
+                result = tools.execute(call['name'], args)
+            else:
+                result = {'ok': False, 'error': 'INVALID_ARGUMENTS', 'message': 'Arguments không phải JSON object hợp lệ.'}
             trace.append({'event': 'tool', 'step': step, 'name': call['name'], 'arguments': call['arguments'], 'result': result})
             messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(result, ensure_ascii=False)})
 
