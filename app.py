@@ -39,6 +39,7 @@ templates = Jinja2Templates(directory=str(ROOT / 'templates'))
 class AskRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     mode: str = Field(default='core', pattern='^(core|bonus)$')
+    source: str = Field(default='snapshot', pattern='^(snapshot|live)$')
 
 
 @app.get('/', response_class=HTMLResponse)
@@ -56,7 +57,7 @@ def ask(body: AskRequest):
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     bonus = body.mode == 'bonus'
-    tools = BonusTools() if bonus else StatusTools()
+    tools = BonusTools(mode=body.source) if bonus else StatusTools(mode=body.source)
     result = run_agent(body.query.strip(), provider, tools, max_steps=16 if bonus else 8)
     case = {'id': 'web', 'level': '', 'tools': body.mode, 'query': body.query}
-    return summarize(case, result)
+    return {**summarize(case, result), 'source': body.source}
